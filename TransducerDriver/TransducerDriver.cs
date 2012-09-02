@@ -228,12 +228,15 @@ namespace TransducerDriver
                 
                 Double[] tmp = new Double[0];
                 
-                tmp = upsample(leftSamples, 15);
+                tmp = upsample(leftSamples, 3);
+                tmp = upsample(tmp, 5);
                 tmp = upsample(tmp, 7);
                 tmp = upsample(tmp, 7);
                 Array.Copy(tmp, samplerate / 60, sink.values, 0, samplerate / 60);
+
+                //Double[] h = genLowPassFilter(53, 1.5 / 8);
+
                 /*
-                 
                 sink.values = new Double[sink.values.Length];
                 sink.values[0] = leftSamples[1] * samplerate / 60;
                 sink.values[samplerate / 60] = leftSamples[1] * samplerate / 60;
@@ -251,6 +254,8 @@ namespace TransducerDriver
                     Int16 s16 = (Int16)value;
                     output.Write(s16);
                 });
+                
+                //output.Write((Int16)leftChannelSample);
 
                 // output graph
                 leftChannelOutput.Value = (Int32)Math.Min(Math.Abs(leftChannelSample), leftChannelOutput.Maximum); checkClip(leftChannelOutput);
@@ -272,7 +277,7 @@ namespace TransducerDriver
                 dst[i * L] = src[i] * L;
 
             // anti-imaging filter
-            Double[] h = genLowPassFilter(2 * L, 1.0 / L);
+            Double[] h = genLowPassFilter(2*L, 1.0 / L);
 
             //y[n]=b0x[n]+b1x[n-1]+....bmx[n-M]
             for (Int32 i = 0; i < dst.Length; i++)
@@ -282,32 +287,32 @@ namespace TransducerDriver
                     if (i - j >= 0)
                         result[i] += dst[i - j] * h[j] / L;
                     else
-                        result[i] += dst[i - j + dst.Length] * h[j] * L;
+                        result[i] += dst[i - j + dst.Length] * h[j] / L;
                 }
             }
 
             return result;
         }
 
-        private Double[] genLowPassFilter(Int32 length, Double cutoff)
+        private Double[] genLowPassFilter(Int32 N, Double cutoff_freq)
         {
-            Int32 M = length - 1;
-            Double[] h = new Double[length+1];
+            // Hamming window
+            Double[] h = new Double[N+1];
 
-            for (Int32 n = 0; n < length; n++)
+            // new cutoff frequency fixed in the middle of transition band
+            Double cutoff_freq_fixed = cutoff_freq + 3.3/N/2;
+            Double cutoff_omega = cutoff_freq_fixed * 2 * Math.PI;
+
+            // h[n] = w[n] * h_d[n];
+            Int32 index_offset = (Int32)Math.Floor(N / 2.0);
+
+            h[0] = 2 * cutoff_freq_fixed;
+
+            for (Int32 n = 1; n <= N; n++)
             {
-                /*
-                if (n == M / 2)
-                    h[n] = 2.0 * cutoff;
-                else
-                {
-                    Double i = (n - M / 2);
-                    //h[n] =  Math.Sin(2.0 * Math.PI * cutoff * i) / (Math.PI * i) * (0.54 - 0.46 * Math.Cos(2.0 * Math.PI * n / M));
-                    h[length/2 + n] = Math.Sin(2.0 * Math.PI * cutoff * i) / (Math.PI * i) * (0.42 + 0.5 * Math.Cos(2.0 * Math.PI * n / M) + 0.08 * Math.Cos(4.0 * Math.PI * n / M));
-                    h[length / 2 - n] = h[length / 2 + n];
-                }
-                */
-                h[n] = 0.5 * (1 - Math.Cos(2 * Math.PI * n / (length)));
+                Double h_d = 2.0 * cutoff_freq_fixed * Math.Sin(n * cutoff_omega) / (n * cutoff_omega);
+                Double w = 0.54 + 0.46 * Math.Cos(2.0 * Math.PI * n / N);
+                h[n] =  w * h_d;
             }
 
             return h;
