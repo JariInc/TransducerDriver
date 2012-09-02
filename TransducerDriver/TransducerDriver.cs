@@ -29,8 +29,11 @@ namespace TransducerDriver
         Double[] leftSamples = new Double[3];
         Double[] rightSamples = new Double[3];
 
-        // 3 * 16ms sink
+        // 16ms sink
         AudioSource sink = new AudioSource("sink", samplerate / 60, samplerate);
+
+        // debug
+        BinaryWriter output = new BinaryWriter(File.Open("output.raw", FileMode.Create));
 
         public TransducerDriver()
         {
@@ -240,6 +243,14 @@ namespace TransducerDriver
                 */
 
                 sink.Play(engine);
+
+                List<Double> values = sink.values.ToList();
+
+                values.ForEach(delegate(Double value)
+                {
+                    Int16 s16 = (Int16)value;
+                    output.Write(s16);
+                });
 
                 // output graph
                 leftChannelOutput.Value = (Int32)Math.Min(Math.Abs(leftChannelSample), leftChannelOutput.Maximum); checkClip(leftChannelOutput);
