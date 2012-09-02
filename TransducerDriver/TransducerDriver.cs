@@ -30,7 +30,7 @@ namespace TransducerDriver
         Double[] rightSamples = new Double[3];
 
         // 3 * 16ms sink
-        AudioSource sink = new AudioSource("sink", 3 * samplerate / 60, samplerate);
+        AudioSource sink = new AudioSource("sink", samplerate / 60, samplerate);
 
         public TransducerDriver()
         {
@@ -218,13 +218,27 @@ namespace TransducerDriver
                 rightSamples[2] = rightSamples[1];
                 rightSamples[0] = rightChannelSample;
 
+                /*
+                Double[] tmp = new Double[5] {1.0, 0.0, 0.0, 0.0, 0.0};
+                tmp = upsample(tmp, 2);
+                */
+                
+                Double[] tmp = new Double[0];
+                
+                tmp = upsample(leftSamples, 15);
+                tmp = upsample(tmp, 7);
+                tmp = upsample(tmp, 7);
+                Array.Copy(tmp, samplerate / 60, sink.values, 0, samplerate / 60);
+                /*
+                 
                 sink.values = new Double[sink.values.Length];
-
                 sink.values[0] = leftSamples[1] * samplerate / 60;
                 sink.values[samplerate / 60] = leftSamples[1] * samplerate / 60;
                 sink.values[2 * samplerate / 60] = leftSamples[0] * samplerate / 60;
 
                 sink.LPF(30, samplerate / 30);
+                */
+
                 sink.Play(engine);
 
                 // output graph
@@ -234,6 +248,58 @@ namespace TransducerDriver
             }
             else
                 ir.Connect();
+        }
+
+        private Double[] upsample(Double[] src, Int32 L) 
+        {
+            // reset destination
+            Double[] dst = new Double[src.Length * L];
+            Double[] result = new Double[src.Length * L];
+
+            // copy values
+            for (Int32 i = 0; i < src.Length; i++)
+                dst[i * L] = src[i] * L;
+
+            // anti-imaging filter
+            Double[] h = genLowPassFilter(2 * L, 1.0 / L);
+
+            //y[n]=b0x[n]+b1x[n-1]+....bmx[n-M]
+            for (Int32 i = 0; i < dst.Length; i++)
+            {
+                for (Int32 j = 0; j < h.Length; j++)
+                {
+                    if (i - j >= 0)
+                        result[i] += dst[i - j] * h[j] / L;
+                    else
+                        result[i] += dst[i - j + dst.Length] * h[j] * L;
+                }
+            }
+
+            return result;
+        }
+
+        private Double[] genLowPassFilter(Int32 length, Double cutoff)
+        {
+            Int32 M = length - 1;
+            Double[] h = new Double[length+1];
+
+            for (Int32 n = 0; n < length; n++)
+            {
+                /*
+                if (n == M / 2)
+                    h[n] = 2.0 * cutoff;
+                else
+                {
+                    Double i = (n - M / 2);
+                    //h[n] =  Math.Sin(2.0 * Math.PI * cutoff * i) / (Math.PI * i) * (0.54 - 0.46 * Math.Cos(2.0 * Math.PI * n / M));
+                    h[length/2 + n] = Math.Sin(2.0 * Math.PI * cutoff * i) / (Math.PI * i) * (0.42 + 0.5 * Math.Cos(2.0 * Math.PI * n / M) + 0.08 * Math.Cos(4.0 * Math.PI * n / M));
+                    h[length / 2 - n] = h[length / 2 + n];
+                }
+                */
+                h[n] = 0.5 * (1 - Math.Cos(2 * Math.PI * n / (length)));
+            }
+
+            return h;
         }
 
         private void checkClip(ProgressBar pb)
